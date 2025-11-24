@@ -7,6 +7,6 @@ Uses solvers for s, eccentricity, and compute K and compute C functions to provi
 def solve_K_C(D, omega, eta, L, f, c):
     S = compute_s(D, omega, eta, L, f, c)
     eps = solve_eccentricity(S)
-    K = compute_K(c, eps)
-    C = compute_C(c, omega, eps)
+    K = compute_K(f, c, eps)
+    C = compute_C(f, c, omega, eps)
     return K, C
