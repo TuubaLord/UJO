@@ -30,9 +30,13 @@ D, omega, eta, L, f, c = 100 * 1e-3, rpm_to_rads(1500), 0.1, 30 * 1e-3, 525, 0.1
 K, C = solve_K_C(D, omega, eta, L, f, c)
 
 
-
-dK = K_ex - K
-dC = C_ex - C
+print(K, "K")
+print(C, "C")
+"""
+unit conversions back - should be accurate to at least 1 decimal
+"""
+dK = (K_ex - K) * 1e-6
+dC = (C_ex - C) * 1e-3
 
 
 """
