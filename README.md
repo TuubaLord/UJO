@@ -2,6 +2,15 @@
 
 Team UJO for Rotor x bearing hackaton
 
+## Solving K and C matrixes, and eccentricity
+
+run the file test_and_compute_K_C.py
+-> this computes eccentricity, and solves the K and C matrixes as well as compares them to example 5.5.1
+
+
+# Gepardointi
+
+
 ## Fluid bearing stiffness and damping matrices
 
 The repository now includes `fluid_bearing.py`, which evaluates linearized
