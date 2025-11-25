@@ -290,7 +290,7 @@ if __name__ == "__main__":
 
     # Show Campbell plot and close it after a brief pause
     plt.show(block=False)
-    plt.pause(1)  # Pause for 1 second to view the Campbell plot before closing
+    plt.pause(5)  # Pause for 1 second to view the Campbell plot before closing
     plt.close()
 
     L_total = 1.5
