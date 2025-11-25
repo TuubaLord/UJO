@@ -363,28 +363,49 @@ def animate_mode_shape(rotor, modes_list, eigvals_list, L_total, n_elems, mode_i
     
 st.title("Ujo roottori 👉👈🥺")
 
+with st.sidebar:
+    example_book = st.checkbox("Calculate with Friswell example 5.5", value=True)
+
+    # D = 
+# D: diameter of bearing (m)
+# omega: angular velocity (rad/s)
+# eta: oil viscosity (Pa * s)
+# L: bearing length (m)
+# f: static load (N)
+# c: clearance between shaft and bearing (m)
 
 rotor = build_overhung_rotor()
 
 # Bearings
-k_xx = 0.2e6
-k_yy = 0.4e6
-k_xy = 0.0
-k_yx = 0.0
-c_xx = 0.0
-c_yy = 0.0
-c_xy = 0.0
-c_yx = 0.0
+if example_book:
+    Kb_dict = {
+        0: np.array([[12.81, 16.39], [-25.06, 8.815]]) * 1e6,
+        10: np.array([[12.81, 16.39], [-25.06, 8.815]]) * 1e6
+    }
 
-Kb_dict = {
-    0: np.array([[k_xx, k_xy], [k_yx, k_yy]]),
-    10: np.array([[k_xx, k_xy], [k_yx, k_yy]])
-}
+    Cb_dict = {
+        0: np.array([[232.9, -81.92], [-81.92, 294.9]]) * 1e3,
+        10: np.array([[232.9, -81.92], [-81.92, 294.9]]) * 1e3
+    }
+else:
+    k_xx = 0.2e6
+    k_yy = 0.4e6
+    k_xy = 0.0
+    k_yx = 0.0
+    c_xx = 0.0
+    c_yy = 0.0
+    c_xy = 0.0
+    c_yx = 0.0
 
-Cb_dict = {
-    0: np.array([[c_xx, c_xy], [c_yx, c_yy]]),
-    10: np.array([[c_xx, c_xy], [c_yx, c_yy]])
-}
+    Kb_dict = {
+        0: np.array([[k_xx, k_xy], [k_yx, k_yy]]),
+        10: np.array([[k_xx, k_xy], [k_yx, k_yy]])
+    }
+
+    Cb_dict = {
+        0: np.array([[c_xx, c_xy], [c_yx, c_yy]]),
+        10: np.array([[c_xx, c_xy], [c_yx, c_yy]])
+    }
 
 # Speed sweep
 speeds_rpm = np.linspace(0, 6000, 40)
