@@ -2,7 +2,6 @@ import ross as rs
 import numpy as np
 import matplotlib.pyplot as plt
 
-
 # =========================================================
 #  Build the rotor
 # =========================================================
@@ -139,6 +138,71 @@ def campbell_bending(rotor, Kb_dict, Cb_dict, speeds, n_modes_plot=5):
     return np.array(mode_freqs)
 
 
+def MAC(phi, psi):
+    phi = phi.astype(complex)
+    psi = psi.astype(complex)
+    num = np.abs(np.vdot(phi, psi))**2
+    den = (np.vdot(phi, phi) * np.vdot(psi, psi))
+    return num / den
+
+
+def extract_bending_modes(rotor, eigvals, eigvecs, n_modes=12):
+
+    scores = np.array([bending_score(eigvecs[:, i], rotor)
+                       for i in range(len(eigvals))])
+
+    idx = np.argsort(-scores)[:n_modes]
+    vals = eigvals[idx]
+    vecs = eigvecs[:, idx]
+
+    return vals, vecs
+
+
+def modal_tracking(rotor, Kb_dict, Cb_dict, speeds, n_modes=6):
+    """
+    Returns:
+        tracked_freqs: (n_speeds × n_modes)
+        tracked_eigvals: list of eigenvalue arrays
+        tracked_modes: list of mode shape matrices
+    """
+
+    tracked_freqs = np.zeros((len(speeds), n_modes))
+    tracked_eigvals = []
+    tracked_modes = []
+
+    # ---- Compute modes at first speed ----
+    eigvals, eigvecs = compute_eigenvalues(rotor, Kb_dict, Cb_dict, speeds[0])
+    vals, vecs = extract_bending_modes(rotor, eigvals, eigvecs, n_modes)
+
+    tracked_eigvals.append(vals)
+    tracked_modes.append(vecs)
+
+    tracked_freqs[0, :] = np.abs(np.imag(vals)) / (2*np.pi)
+
+    # ---- Track through remaining speeds ----
+    for k in range(1, len(speeds)):
+        eigvals_new, eigvecs_new = compute_eigenvalues(rotor, Kb_dict, Cb_dict, speeds[k])
+
+        vals_new, vecs_new = extract_bending_modes(rotor, eigvals_new, eigvecs_new, n_modes)
+
+        MAC_matrix = np.zeros((n_modes, n_modes))
+
+        for i in range(n_modes):
+            for j in range(n_modes):
+                MAC_matrix[i, j] = MAC(tracked_modes[-1][:, i], vecs_new[:, j])
+
+        assignment = np.argmax(MAC_matrix, axis=1)
+
+        matched_vals = vals_new[assignment].astype(complex)
+        matched_vecs = vecs_new[:, assignment].astype(complex)
+
+        tracked_eigvals.append(matched_vals)
+        tracked_modes.append(matched_vecs)
+
+        tracked_freqs[k, :] = np.abs(np.imag(matched_vals)) / (2*np.pi)
+
+    return tracked_freqs, tracked_eigvals, tracked_modes
+
 # =========================================================
 #  MAIN
 # =========================================================
@@ -168,7 +232,7 @@ if __name__ == "__main__":
 
     # Speed sweep
     speeds_rpm = np.linspace(0, 6000, 40)
-    speeds_rad = speeds_rpm * 2*np.pi/60
+    speeds_rad = speeds_rpm * 2 * np.pi / 60
 
     # Bend-only Campbell
     freqs = campbell_bending(rotor, Kb_dict, Cb_dict, speeds_rad, n_modes_plot=12)
@@ -177,68 +241,47 @@ if __name__ == "__main__":
     # ---------------------------------------------------------
     # Plot Campbell with whirl direction + critical crossings
     # ---------------------------------------------------------
+    # ---- Run the modal tracking ----
+    freqs, eigvals_list, modes_list = modal_tracking(
+        rotor, Kb_dict, Cb_dict, speeds_rad, n_modes=12
+    )
+
+    # ---- Plot ----
     plt.figure(figsize=(10, 6))
 
-    Omega_1x = speeds_rpm / 60.0  # synchronous excitation line (Hz)
+    Omega_1x = speeds_rpm / 60.0  # 1× running speed in Hz
 
-    critical_points_rpm = []
-    critical_points_hz = []
+    for mode in range(freqs.shape[1]):
 
-    for mode_index in range(freqs.shape[1]):
+        mode_freqs = freqs[:, mode]
 
-        # At each speed, get the eigenvalue of this mode
-        mode_freqs = []
-        mode_whirl = []
+        # classify whirl direction based on imaginary part of eigenvalues
+        whirl = np.array([
+            "FW" if np.imag(eigvals_list[i][mode]) > 0 else "BW"
+            for i in range(len(speeds_rpm))
+        ])
 
-        for i, Omega in enumerate(speeds_rad):
-            eigvals, eigvecs = compute_eigenvalues(rotor, Kb_dict, Cb_dict, Omega)
+        # FW / BW masking
+        is_FW = whirl == "FW"
+        is_BW = whirl == "BW"
 
-            # sort modes by bending participation
-            scores = np.array([bending_score(eigvecs[:, j], rotor) for j in range(len(eigvals))])
-            idx_sorted = np.argsort(-scores)
-            mode_id = idx_sorted[mode_index]
+        plt.plot(
+            speeds_rpm[is_FW], mode_freqs[is_FW],
+            'b-', lw=2,
+            label=f"Mode {mode + 1} FW"
+        )
+        plt.plot(
+            speeds_rpm[is_BW], mode_freqs[is_BW],
+            'r--', lw=2,
+            label=f"Mode {mode + 1} BW", zorder=10
+        )
 
-            lam = eigvals[mode_id]
-
-            freq_hz = np.abs(np.imag(lam)) / (2*np.pi)
-            mode_freqs.append(freq_hz)
-
-            # whirl determination
-            if np.real(lam) > 0:
-                mode_whirl.append("FW")
-            else:
-                mode_whirl.append("BW")
-
-        mode_freqs = np.array(mode_freqs)
-
-        # Split forward / backward
-        is_FW = np.array([w == "FW" for w in mode_whirl])
-        is_BW = ~is_FW
-
-        # Plot FW/BW separately
-        plt.plot(speeds_rpm[is_FW], mode_freqs[is_FW],
-                'b-', linewidth=2, label=f"Mode {mode_index+1} FW" if mode_index == 0 else "")
-
-        plt.plot(speeds_rpm[is_BW], mode_freqs[is_BW],
-                'r-', linewidth=2, label=f"Mode {mode_index+1} BW" if mode_index == 0 else "")
-
-        # detect crossings where |mode_freq - sync| < tolerance
-        tol = 0.5  # Hz tolerance for critical speed detection
-        for i in range(len(speeds_rpm)):
-            if abs(mode_freqs[i] - Omega_1x[i]) < tol and mode_whirl[i] == "FW":
-                critical_points_rpm.append(speeds_rpm[i])
-                critical_points_hz.append(mode_freqs[i])
-
-    # plot 1× line
+    # 1× running speed line
     plt.plot(speeds_rpm, Omega_1x, '--k', linewidth=2, label="1× Running Speed")
-
-    # plot critical speed markers
-    plt.scatter(critical_points_rpm, critical_points_hz,
-                s=80, color='yellow', edgecolors='black', zorder=5, label="Critical Speed")
 
     plt.xlabel("Speed (RPM)")
     plt.ylabel("Frequency (Hz)")
-    plt.title("Campbell Diagram — Bending Modes (FW/BW + Critical Speeds)")
+    plt.title("Campbell Diagram with Automatic Modal Tracking (MAC)")
     plt.grid(True)
     plt.legend()
     plt.tight_layout()
