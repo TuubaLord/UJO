@@ -1,6 +1,7 @@
 import ross as rs
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
 
 # =========================================================
 #  Build the rotor
@@ -203,6 +204,7 @@ def modal_tracking(rotor, Kb_dict, Cb_dict, speeds, n_modes=6):
 
     return tracked_freqs, tracked_eigvals, tracked_modes
 
+
 # =========================================================
 #  MAIN
 # =========================================================
@@ -246,7 +248,7 @@ if __name__ == "__main__":
         rotor, Kb_dict, Cb_dict, speeds_rad, n_modes=12
     )
 
-    # ---- Plot ----
+    # ---- Plot Campbell Plot ----
     plt.figure(figsize=(10, 6))
 
     Omega_1x = speeds_rpm / 60.0  # 1× running speed in Hz
@@ -284,5 +286,58 @@ if __name__ == "__main__":
     plt.title("Campbell Diagram with Automatic Modal Tracking (MAC)")
     plt.grid(True)
     plt.legend()
+    plt.tight_layout()
+
+    # Show Campbell plot and close it after a brief pause
+    plt.show(block=False)
+    plt.pause(1)  # Pause for 1 second to view the Campbell plot before closing
+    plt.close()
+
+    L_total = 1.5
+    n_elems = 16
+
+    # ---- Create the animation ----
+    # Select the mode for animation (let's use the first mode)
+    mode_idx = 0
+    mode_shape = modes_list[-1][:n_elems*6, mode_idx]  # Last speed (or any you like)
+    mode_shape = mode_shape[::6]  # Extract x-displacements only for simplicity
+    # NOTE: To visualize full 3D mode shapes, consider using y-displacements and rotations as well
+    # mode_shape_y = mode_shape[1::6]  # Extract y-displacements only for simplicity
+
+    # Plotting for the animation
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.set_xlim([-1, 1])
+    ax.set_ylim([-1, 1])
+    ax.set_xlabel("X displacement (m)")
+    ax.set_ylabel("Y displacement (m)")
+    ax.set_title("Mode Shape Animation")
+
+    # Plot rotor shaft and disk
+    shaft_x = np.linspace(0, L_total, n_elems)
+    shaft_y = np.zeros_like(shaft_x)
+    ax.plot(shaft_x, shaft_y, 'k-', lw=2)  # Shaft line
+    ax.plot(L_total, 0, 'bo', markersize=10)  # Disk marker (for simplicity)
+    ax.set_xlim([-0.1, L_total + 0.1])
+    ax.set_ylim([-1.0, 1.0])
+
+    # Create a line for plotting mode shapes
+    line, = ax.plot([], [], 'b-', lw=2)
+    theta = np.linspace(0, 2 * np.pi, 100)
+
+    # Animation function
+    def update(frame):
+        # Get mode displacement at each speed
+        displacement = np.abs(mode_shape) * np.cos(theta[frame] + np.angle(mode_shape))  # Adjust for rotation
+        # NOTE: To visualize y-displacements instead, uncomment the following line
+        # displacement_y = np.abs(mode_shape_y) * np.cos(theta[frame] + np.angle(mode_shape_y))  # Adjust for rotation
+
+        # Update mode shape (displacement) on plot
+        line.set_data(shaft_x, displacement/np.max(np.abs(mode_shape)))  # Scale for visibility
+        return line,
+
+    # Create the animation
+    ani = FuncAnimation(fig, update, frames=len(theta), interval=100, blit=True)
+
+    # Show animation
     plt.tight_layout()
     plt.show()
