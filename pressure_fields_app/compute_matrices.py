@@ -18,7 +18,7 @@ def compute_K(f, c, epsilon):
     auv = h0 * math.pi * ( math.pi**2 * (1 - epsilon**2)**2 - 16 * epsilon**4) / (epsilon * math.sqrt(1 - epsilon**2))
     avu = -h0 * math.pi * (math.pi**2 * (1 - epsilon**2) * (1 + 2 * epsilon**2)+ 32 * epsilon**2 * (1 + epsilon**2)) / (epsilon * math.sqrt(1 - epsilon**2))    
     avv = h0 * 4 * (math.pi**2 * (1 + 2 * epsilon**2) + (32 * epsilon**2 * (1 + epsilon**2)) / (1 - epsilon**2))
-    arr = np.array([[auu, auv], [avu, avv]], dtype=np.float64)
+    arr = np.array([[auu, auv], [avu, avv]])
     return (f / c) * arr
 
 def compute_C(f, c, omega, epsilon):
@@ -38,7 +38,7 @@ def compute_C(f, c, omega, epsilon):
     buu = h0 * (2 * math.pi * math.sqrt(1 - epsilon**2) * (math.pi**2 * (1 + 2 * epsilon**2) - 16 * epsilon**2)) / (epsilon)
     buv = -h0 * 8 * (math.pi**2 * (1 + 2 * epsilon**2) - 16 * epsilon**2)
     bvv = h0 * 2 * math.pi * (math.pi**2 * (1 - epsilon**2)**2 + 48 * epsilon**2) / (epsilon * math.sqrt(1 - epsilon**2))
-    arr = np.array([[buu, buv], [buv, bvv]], dtype=np.float64)
+    arr = np.array([[buu, buv], [buv, bvv]])
     return (f / (c * omega)) * arr
 
 def _compute_h0(epsilon):

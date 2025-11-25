@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation, PillowWriter
 from io import BytesIO
 from tempfile import NamedTemporaryFile
+from solve_K_C import solve_K_C
 
 # =========================================================
 #  Build the rotor
@@ -125,9 +126,9 @@ def campbell_bending(rotor, Kb_dict, Cb_dict, speeds, n_modes_plot=5):
 
     mode_freqs = []
 
-    for Omega in speeds:
+    for idx, Omega in enumerate(speeds):
 
-        eigvals, eigvecs = compute_eigenvalues(rotor, Kb_dict, Cb_dict, Omega)
+        eigvals, eigvecs = compute_eigenvalues(rotor, Kb_dict[idx], Cb_dict[idx], Omega)
 
         freqs = np.abs(np.imag(eigvals)) / (2*np.pi)  # Hz
 
@@ -175,7 +176,7 @@ def modal_tracking(rotor, Kb_dict, Cb_dict, speeds, n_modes=6):
     tracked_modes = []
 
     # ---- Compute modes at first speed ----
-    eigvals, eigvecs = compute_eigenvalues(rotor, Kb_dict, Cb_dict, speeds[0])
+    eigvals, eigvecs = compute_eigenvalues(rotor, Kb_dict[0], Cb_dict[0], speeds[0])
     vals, vecs = extract_bending_modes(rotor, eigvals, eigvecs, n_modes)
 
     tracked_eigvals.append(vals)
@@ -185,7 +186,7 @@ def modal_tracking(rotor, Kb_dict, Cb_dict, speeds, n_modes=6):
 
     # ---- Track through remaining speeds ----
     for k in range(1, len(speeds)):
-        eigvals_new, eigvecs_new = compute_eigenvalues(rotor, Kb_dict, Cb_dict, speeds[k])
+        eigvals_new, eigvecs_new = compute_eigenvalues(rotor, Kb_dict[k], Cb_dict[k], speeds[k])
 
         vals_new, vecs_new = extract_bending_modes(rotor, eigvals_new, eigvecs_new, n_modes)
 
@@ -364,17 +365,20 @@ def animate_mode_shape(rotor, modes_list, eigvals_list, L_total, n_elems, mode_i
 st.title("Ujo roottori 👉👈🥺")
 
 with st.sidebar:
-    example_book = st.checkbox("Calculate with Friswell example 5.5", value=True)
+    example_book = st.checkbox("Calculate with Friswell example 5.5", value=False)
 
-    # D = 
-# D: diameter of bearing (m)
-# omega: angular velocity (rad/s)
-# eta: oil viscosity (Pa * s)
-# L: bearing length (m)
-# f: static load (N)
-# c: clearance between shaft and bearing (m)
+    D = st.slider("Diamater of bearing [mm]", 10, 150, 100, 10) * 1e-3
+    # omega
+    eta = st.slider("Oil viscosity [Pa*s]", 0.01, 1.0, 0.1, 0.01)
+    L = st.slider("Bearing length (mm)", 10, 50, 30, 10) * 1e-3
+    f = st.slider("Static load (N)", 100, 1000, 525, 5)
+    c = st.slider("Clearance between shaft and bearing (mm)", 0.01, 0.5, 0.1, 0.01) * 1e-3
 
 rotor = build_overhung_rotor()
+
+# Speed sweep
+speeds_rpm = np.linspace(1000, 6000, 40)
+speeds_rad = speeds_rpm * 2 * np.pi / 60
 
 # Bearings
 if example_book:
@@ -387,39 +391,45 @@ if example_book:
         0: np.array([[232.9, -81.92], [-81.92, 294.9]]) * 1e3,
         10: np.array([[232.9, -81.92], [-81.92, 294.9]]) * 1e3
     }
+    kbs = [Kb_dict for _ in range(40)]
+    cbs = [Cb_dict for _ in range(40)]
 else:
-    k_xx = 0.2e6
-    k_yy = 0.4e6
-    k_xy = 0.0
-    k_yx = 0.0
-    c_xx = 0.0
-    c_yy = 0.0
-    c_xy = 0.0
-    c_yx = 0.0
+    kbs = []
+    cbs = []
+    for speed in speeds_rad:
+        K, C, _ = solve_K_C(D, speed, eta, L, f, c)
 
-    Kb_dict = {
-        0: np.array([[k_xx, k_xy], [k_yx, k_yy]]),
-        10: np.array([[k_xx, k_xy], [k_yx, k_yy]])
-    }
+        kbs.append({0: K.astype(np.float64), 10: K.astype(np.float64)})
+        cbs.append({0: C.astype(np.float64), 10: C.astype(np.float64)})
 
-    Cb_dict = {
-        0: np.array([[c_xx, c_xy], [c_yx, c_yy]]),
-        10: np.array([[c_xx, c_xy], [c_yx, c_yy]])
-    }
+    # k_xx = 0.2e6
+    # k_yy = 0.4e6
+    # k_xy = 0.0
+    # k_yx = 0.0
+    # c_xx = 0.0
+    # c_yy = 0.0
+    # c_xy = 0.0
+    # c_yx = 0.0
 
-# Speed sweep
-speeds_rpm = np.linspace(0, 6000, 40)
-speeds_rad = speeds_rpm * 2 * np.pi / 60
+    # Kb_dict = {
+    #     0: np.array([[k_xx, k_xy], [k_yx, k_yy]]),
+    #     10: np.array([[k_xx, k_xy], [k_yx, k_yy]])
+    # }
+
+    # Cb_dict = {
+    #     0: np.array([[c_xx, c_xy], [c_yx, c_yy]]),
+    #     10: np.array([[c_xx, c_xy], [c_yx, c_yy]])
+    # }
 
 # Bend-only Campbell
-freqs = campbell_bending(rotor, Kb_dict, Cb_dict, speeds_rad, n_modes_plot=12)
+freqs = campbell_bending(rotor, kbs, cbs, speeds_rad, n_modes_plot=12)
 print("Campbell bending freq matrix shape:", freqs.shape)
 
 # ---------------------------------------------------------
 # Run Modal Tracking
 # ---------------------------------------------------------
 freqs, eigvals_list, modes_list = modal_tracking(
-    rotor, Kb_dict, Cb_dict, speeds_rad, n_modes=12
+    rotor, kbs, cbs, speeds_rad, n_modes=12
 )
 
 # ---------------------------------------------------------
