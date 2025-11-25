@@ -206,49 +206,14 @@ def modal_tracking(rotor, Kb_dict, Cb_dict, speeds, n_modes=6):
 
 
 # =========================================================
-#  MAIN
+#  CAMPBELL PLOT
 # =========================================================
-if __name__ == "__main__":
+def plot_campbell(speeds_rpm, freqs, eigvals_list, modes_list):
+    """
+    Generates a Campbell plot with mode tracking and whirl direction.
+    """
 
-    rotor = build_overhung_rotor()
-
-    # Bearings
-    k_xx = 0.2e6
-    k_yy = 0.4e6
-    k_xy = 0.0
-    k_yx = 0.0
-    c_xx = 0.0
-    c_yy = 0.0
-    c_xy = 0.0
-    c_yx = 0.0
-
-    Kb_dict = {
-        0: np.array([[k_xx, k_xy], [k_yx, k_yy]]),
-        10: np.array([[k_xx, k_xy], [k_yx, k_yy]])
-    }
-
-    Cb_dict = {
-        0: np.array([[c_xx, c_xy], [c_yx, c_yy]]),
-        10: np.array([[c_xx, c_xy], [c_yx, c_yy]])
-    }
-
-    # Speed sweep
-    speeds_rpm = np.linspace(0, 6000, 40)
-    speeds_rad = speeds_rpm * 2 * np.pi / 60
-
-    # Bend-only Campbell
-    freqs = campbell_bending(rotor, Kb_dict, Cb_dict, speeds_rad, n_modes_plot=12)
-    print("Campbell bending freq matrix shape:", freqs.shape)
-
-    # ---------------------------------------------------------
-    # Plot Campbell with whirl direction + critical crossings
-    # ---------------------------------------------------------
-    # ---- Run the modal tracking ----
-    freqs, eigvals_list, modes_list = modal_tracking(
-        rotor, Kb_dict, Cb_dict, speeds_rad, n_modes=12
-    )
-
-    # ---- Plot Campbell Plot ----
+    # Plot Campbell Plot
     plt.figure(figsize=(10, 6))
 
     Omega_1x = speeds_rpm / 60.0  # 1× running speed in Hz
@@ -288,21 +253,21 @@ if __name__ == "__main__":
     plt.legend()
     plt.tight_layout()
 
-    # Show Campbell plot and close it after a brief pause
-    plt.show(block=False)
-    plt.pause(5)  # Pause for 1 second to view the Campbell plot before closing
-    plt.close()
+    # Show Campbell plot
+    plt.show()
 
-    L_total = 1.5
-    n_elems = 16
 
-    # ---- Create the animation ----
+# =========================================================
+#  ANIMATION OF MODE SHAPE
+# =========================================================
+def animate_mode_shape(rotor, modes_list, L_total, n_elems, mode_idx=0):
+    """
+    Generates an animation of mode shapes.
+    """
     # Select the mode for animation (let's use the first mode)
-    mode_idx = 0
     mode_shape = modes_list[-1][:n_elems*6, mode_idx]  # Last speed (or any you like)
     mode_shape = mode_shape[::6]  # Extract x-displacements only for simplicity
-    # NOTE: To visualize full 3D mode shapes, consider using y-displacements and rotations as well
-    # mode_shape_y = mode_shape[1::6]  # Extract y-displacements only for simplicity
+    mode_shape_y = mode_shape[1::6]  # Extract y-displacements only for simplicity
 
     # Plotting for the animation
     fig, ax = plt.subplots(figsize=(10, 6))
@@ -328,11 +293,9 @@ if __name__ == "__main__":
     def update(frame):
         # Get mode displacement at each speed
         displacement = np.abs(mode_shape) * np.cos(theta[frame] + np.angle(mode_shape))  # Adjust for rotation
-        # NOTE: To visualize y-displacements instead, uncomment the following line
-        # displacement_y = np.abs(mode_shape_y) * np.cos(theta[frame] + np.angle(mode_shape_y))  # Adjust for rotation
 
         # Update mode shape (displacement) on plot
-        line.set_data(shaft_x, displacement/np.max(np.abs(mode_shape)))  # Scale for visibility
+        line.set_data(shaft_x, displacement / np.max(np.abs(mode_shape)))  # Scale for visibility
         return line,
 
     # Create the animation
@@ -341,3 +304,56 @@ if __name__ == "__main__":
     # Show animation
     plt.tight_layout()
     plt.show()
+
+
+# =========================================================
+#  MAIN
+# =========================================================
+if __name__ == "__main__":
+
+    rotor = build_overhung_rotor()
+
+    # Bearings
+    k_xx = 0.2e6
+    k_yy = 0.4e6
+    k_xy = 0.0
+    k_yx = 0.0
+    c_xx = 0.0
+    c_yy = 0.0
+    c_xy = 0.0
+    c_yx = 0.0
+
+    Kb_dict = {
+        0: np.array([[k_xx, k_xy], [k_yx, k_yy]]),
+        10: np.array([[k_xx, k_xy], [k_yx, k_yy]])
+    }
+
+    Cb_dict = {
+        0: np.array([[c_xx, c_xy], [c_yx, c_yy]]),
+        10: np.array([[c_xx, c_xy], [c_yx, c_yy]])
+    }
+
+    # Speed sweep
+    speeds_rpm = np.linspace(0, 6000, 40)
+    speeds_rad = speeds_rpm * 2 * np.pi / 60
+
+    # Bend-only Campbell
+    freqs = campbell_bending(rotor, Kb_dict, Cb_dict, speeds_rad, n_modes_plot=12)
+    print("Campbell bending freq matrix shape:", freqs.shape)
+
+    # ---------------------------------------------------------
+    # Run Modal Tracking
+    # ---------------------------------------------------------
+    freqs, eigvals_list, modes_list = modal_tracking(
+        rotor, Kb_dict, Cb_dict, speeds_rad, n_modes=12
+    )
+
+    # ---------------------------------------------------------
+    # Plot Campbell Diagram
+    # ---------------------------------------------------------
+    plot_campbell(speeds_rpm, freqs, eigvals_list, modes_list)
+
+    # ---------------------------------------------------------
+    # Animate Mode Shape
+    # ---------------------------------------------------------
+    animate_mode_shape(rotor, modes_list, L_total=1.5, n_elems=15)
