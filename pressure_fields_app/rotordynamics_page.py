@@ -8,6 +8,14 @@ from tempfile import NamedTemporaryFile
 from solve_K_C import solve_K_C
 
 # =========================================================
+#  Cached builders
+# =========================================================
+@st.cache_resource(show_spinner=False)
+def get_overhung_rotor():
+    return build_overhung_rotor()
+
+
+# =========================================================
 #  Build the rotor
 # =========================================================
 def build_overhung_rotor():
@@ -269,6 +277,50 @@ def plot_campbell(speeds_rpm, freqs, eigvals_list, modes_list):
 
 
 # =========================================================
+#  Cached numerical routines
+# =========================================================
+@st.cache_data(show_spinner=False)
+def get_bearing_matrices(example_book, speeds_rad, D, eta, L, f, c):
+    if example_book:
+        Kb_dict = {
+            0: np.array([[12.81, 16.39], [-25.06, 8.815]]) * 1e6,
+            10: np.array([[12.81, 16.39], [-25.06, 8.815]]) * 1e6
+        }
+
+        Cb_dict = {
+            0: np.array([[232.9, -81.92], [-81.92, 294.9]]) * 1e3,
+            10: np.array([[232.9, -81.92], [-81.92, 294.9]]) * 1e3
+        }
+
+        kbs = [Kb_dict for _ in range(len(speeds_rad))]
+        cbs = [Cb_dict for _ in range(len(speeds_rad))]
+        return kbs, cbs
+
+    kbs = []
+    cbs = []
+    for speed in speeds_rad:
+        K, C, _ = solve_K_C(D, speed, eta, L, f, c)
+
+        kbs.append({0: K.astype(np.float64), 10: K.astype(np.float64)})
+        cbs.append({0: C.astype(np.float64), 10: C.astype(np.float64)})
+
+    return kbs, cbs
+
+
+@st.cache_data(show_spinner=False, hash_funcs={np.ndarray: lambda a: a.tobytes()})
+def get_modal_results(speeds_rad, kbs, cbs):
+    rotor = get_overhung_rotor()
+
+    freqs = campbell_bending(rotor, kbs, cbs, speeds_rad, n_modes_plot=12)
+
+    tracked_freqs, eigvals_list, modes_list = modal_tracking(
+        rotor, kbs, cbs, speeds_rad, n_modes=12
+    )
+
+    return freqs, eigvals_list, modes_list
+
+
+# =========================================================
 #  ANIMATION OF MODE SHAPE
 # =========================================================
 def animate_mode_shape(rotor, modes_list, eigvals_list, L_total, n_elems, mode_idx=0):
@@ -374,33 +426,14 @@ with st.sidebar:
     f = st.slider("Static load (N)", 100, 1000, 525, 5)
     c = st.slider("Clearance between shaft and bearing (mm)", 0.01, 0.5, 0.1, 0.01) * 1e-3
 
-rotor = build_overhung_rotor()
+rotor = get_overhung_rotor()
 
 # Speed sweep
 speeds_rpm = np.linspace(1000, 6000, 40)
 speeds_rad = speeds_rpm * 2 * np.pi / 60
 
 # Bearings
-if example_book:
-    Kb_dict = {
-        0: np.array([[12.81, 16.39], [-25.06, 8.815]]) * 1e6,
-        10: np.array([[12.81, 16.39], [-25.06, 8.815]]) * 1e6
-    }
-
-    Cb_dict = {
-        0: np.array([[232.9, -81.92], [-81.92, 294.9]]) * 1e3,
-        10: np.array([[232.9, -81.92], [-81.92, 294.9]]) * 1e3
-    }
-    kbs = [Kb_dict for _ in range(40)]
-    cbs = [Cb_dict for _ in range(40)]
-else:
-    kbs = []
-    cbs = []
-    for speed in speeds_rad:
-        K, C, _ = solve_K_C(D, speed, eta, L, f, c)
-
-        kbs.append({0: K.astype(np.float64), 10: K.astype(np.float64)})
-        cbs.append({0: C.astype(np.float64), 10: C.astype(np.float64)})
+kbs, cbs = get_bearing_matrices(example_book, speeds_rad, D, eta, L, f, c)
 
     # k_xx = 0.2e6
     # k_yy = 0.4e6
@@ -421,15 +454,9 @@ else:
     #     10: np.array([[c_xx, c_xy], [c_yx, c_yy]])
     # }
 
-# Bend-only Campbell
-freqs = campbell_bending(rotor, kbs, cbs, speeds_rad, n_modes_plot=12)
-print("Campbell bending freq matrix shape:", freqs.shape)
-
-# ---------------------------------------------------------
-# Run Modal Tracking
-# ---------------------------------------------------------
-freqs, eigvals_list, modes_list = modal_tracking(
-    rotor, kbs, cbs, speeds_rad, n_modes=12
+# Bend-only Campbell + modal tracking (cached)
+freqs, eigvals_list, modes_list = get_modal_results(
+    speeds_rad, kbs, cbs
 )
 
 # ---------------------------------------------------------

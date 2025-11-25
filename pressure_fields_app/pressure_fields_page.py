@@ -8,6 +8,38 @@ from reynolds_1d_numeric import solve_reynolds_1d_incompressible
 from reynolds_2d_numeric import solve_reynolds_2d_incompressible
 from reynolds_2d_journal import solve_reynolds_2d_journal  # currently unused but kept for later use
 
+@st.cache_data(show_spinner=False)
+def compute_1d_pressure_fields(k, u_l, mu_a, h_T, Lx, Nx):
+    x = np.linspace(0.0, Lx, Nx)
+    h_1d = slider_geometry_h(x, k=k, h_T=h_T, Lx=Lx)
+
+    p_analytic = analytic_pressure_linear_slider(x, k, mu_a, u_l, h_T, Lx)
+    p_1d_num = solve_reynolds_1d_incompressible(x, h_1d, u_l, mu_a)
+
+    return x, h_1d, p_analytic, p_1d_num
+
+
+@st.cache_data(show_spinner=False)
+def compute_2d_pressure_field(k, u_l, mu_a, h_T, Lx, Ly, Nx, Ny, bc_y):
+    x, h_1d, _, _ = compute_1d_pressure_fields(k, u_l, mu_a, h_T, Lx, Nx)
+    dx = x[1] - x[0]
+
+    y = np.linspace(0.0, Ly, Ny)
+    dy = y[1] - y[0]
+    X, Y = np.meshgrid(x, y)
+    h_2d = np.tile(h_1d, (Ny, 1))
+
+    p_2d = solve_reynolds_2d_incompressible(
+        h_2d, dx, dy, u_l, mu_a,
+        max_iter=4000, tol=1e-5, omega=1.6, bc_y=bc_y
+    )
+
+    j_mid = Ny // 2
+    p_mid = p_2d[j_mid, :]
+
+    return X, Y, p_2d, p_mid
+
+
 st.title("Pressure fields for sliding bearing")
 with st.sidebar:
     st.header("Parameters")
@@ -49,13 +81,7 @@ with st.sidebar:
 # ------------------------
 # 1D grid and film thickness
 # ------------------------
-x = np.linspace(0.0, Lx, Nx)
-dx = x[1] - x[0]
-h_1d = slider_geometry_h(x, k=k, h_T=h_T, Lx=Lx)
-
-# --- 1D incompressible solution ---
-p_analytic = analytic_pressure_linear_slider(x, k, mu_a, u_l, h_T, Lx)
-p_1d_num = solve_reynolds_1d_incompressible(x, h_1d, u_l, mu_a)
+x, h_1d, p_analytic, p_1d_num = compute_1d_pressure_fields(k, u_l, mu_a, h_T, Lx, Nx)
 
 # ------------------------
 # 2D solution (if enabled)
@@ -65,18 +91,9 @@ p_mid = None
 X = Y = None
 
 if show_2d:
-    y = np.linspace(0.0, Ly, Ny)
-    dy = y[1] - y[0]
-    X, Y = np.meshgrid(x, y)
-    h_2d = np.tile(h_1d, (Ny, 1))
-
-    p_2d = solve_reynolds_2d_incompressible(
-        h_2d, dx, dy, u_l, mu_a,
-        max_iter=4000, tol=1e-5, omega=1.6, bc_y=bc_y
+    X, Y, p_2d, p_mid = compute_2d_pressure_field(
+        k, u_l, mu_a, h_T, Lx, Ly, Nx, Ny, bc_y
     )
-
-    j_mid = Ny // 2
-    p_mid = p_2d[j_mid, :]
 
 # ------------------------
 # Plot film thickness
